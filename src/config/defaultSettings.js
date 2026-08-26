@@ -1,0 +1,49 @@
+export const DEFAULT_COMMUNITY = {
+  name: "Casagrand Athens",
+  location: "Mogappair / Padi, Chennai",
+  inceptionDate: "2026-07-18",
+};
+
+export const INITIAL_BLOCKS = [
+  {
+    id: "A",
+    name: "Block A (Rooftop Plant)",
+    capacityKwp: 40,
+    inceptionDate: "2026-07-18",
+    initialMeterReading: 0,
+    color: "#f59e0b", // Amber
+    inverterModel: "Deye SUN-40K-G04 (BLE)",
+    status: "Active",
+  },
+  {
+    id: "B",
+    name: "Block B (Rooftop Plant)",
+    capacityKwp: 45,
+    inceptionDate: "2026-07-18",
+    initialMeterReading: 0,
+    color: "#0284c7", // Sky Blue
+    inverterModel: "Deye SUN-45K-G04 (BLE)",
+    status: "Active",
+  },
+  {
+    id: "F",
+    name: "Block F (Rooftop Plant)",
+    capacityKwp: 35,
+    inceptionDate: "2026-07-18",
+    initialMeterReading: 0,
+    color: "#10b981", // Emerald
+    inverterModel: "Deye SUN-35K-G04 (BLE)",
+    status: "Active",
+  },
+];
+
+export const DEFAULT_SETTINGS = {
+  communityName: "Casagrand Athens",
+  gridTariffPerKwh: 8.50, // INR ₹ per kWh
+  co2FactorKgPerKwh: 0.82, // CEA India standard grid emission factor (~0.82 kg CO2/kWh)
+  treesFactorPerKwh: 0.041, // 1 tree absorbs ~20kg CO2 per year (~0.041 trees/kWh)
+  adminPin: "SolarAthens",
+  gasWebAppUrl: "https://script.google.com/macros/s/AKfycbyx1HquSxaCiCz5SjZ09_DVCkkN7R3YL55ZgPFBynPGTxUmDayd2LhKDGhrWinKBwGv/exec", // Google Apps Script URL
+  enableProRataInterpolation: true,
+  currencySymbol: "₹",
+};
