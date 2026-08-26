@@ -19,6 +19,7 @@ import {
   saveStoredSettings,
   saveBlocksConfig,
   resetToSampleData,
+  zeroiseAllData,
 } from './services/api';
 import { buildContinuousSolarSeries } from './services/proRataEngine';
 import { calculateSummaryMetrics } from './services/analytics';
@@ -110,6 +111,15 @@ export default function App() {
   // Handle data reset
   const handleResetData = () => {
     const res = resetToSampleData();
+    setRawLogs(res.logs);
+    setBlocks(res.blocks);
+    setSettings(res.settings);
+    setIsLiveSync(false);
+  };
+
+  // Handle data zeroise
+  const handleZeroiseData = () => {
+    const res = zeroiseAllData();
     setRawLogs(res.logs);
     setBlocks(res.blocks);
     setSettings(res.settings);
@@ -372,6 +382,7 @@ export default function App() {
         onSaveSettings={handleSaveSettings}
         onSaveBlocks={handleSaveBlocks}
         onResetData={handleResetData}
+        onZeroiseData={handleZeroiseData}
       />
 
       <SetupGuideModal

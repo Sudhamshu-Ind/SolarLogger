@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Settings, Link, IndianRupee, Shield, Plus, Trash2, CheckCircle2, RotateCcw, AlertTriangle, Cpu } from 'lucide-react';
 
 export default function SettingsModal({
@@ -9,12 +9,20 @@ export default function SettingsModal({
   onSaveSettings,
   onSaveBlocks,
   onResetData,
+  onZeroiseData,
 }) {
   const [localSettings, setLocalSettings] = useState({ ...settings });
   const [localBlocks, setLocalBlocks] = useState([...blocks]);
   const [testStatus, setTestStatus] = useState(null);
   const [activeTab, setActiveTab] = useState('general'); // 'general' | 'blocks' | 'reset'
   const [isTestingUrl, setIsTestingUrl] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalSettings({ ...settings });
+      setLocalBlocks([...blocks]);
+    }
+  }, [isOpen, settings, blocks]);
 
   if (!isOpen) return null;
 
@@ -344,27 +352,30 @@ export default function SettingsModal({
 
         {/* Tab 3: Data Reset */}
         {activeTab === 'reset' && (
-          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 space-y-3 text-xs">
-            <div className="flex items-center gap-2 text-rose-400 font-bold">
-              <AlertTriangle className="w-5 h-5" />
-              <span>Reset to Realistic Sample Data</span>
+          <div className="space-y-4 text-xs">
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-3">
+              <div className="flex items-center gap-2 text-amber-400 font-bold">
+                <RotateCcw className="w-4 h-4" />
+                <span>Zeroise &amp; Start Fresh Live Readings</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                Clears all historical mock logs and sets baseline meters to <strong>0 kWh</strong> for Block A (8 kWp), Block B (20 kWp), and Block F (31 kWp) so you can enter live daily readings.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to zeroise all logs and start fresh with 0 kWh baseline?')) {
+                    if (onZeroiseData) onZeroiseData();
+                    else onResetData();
+                    onClose();
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 shadow-md transition active:scale-95"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Zeroise All Data (Ready for Live Entries)</span>
+              </button>
             </div>
-            <p className="text-slate-300 leading-relaxed">
-              Reset local logs back to the default realistic seed dataset starting from 18-Jul-2026 for Blocks A, B, and F.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Reset all local logs and blocks back to default sample dataset?')) {
-                  onResetData();
-                  onClose();
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-2 font-bold rounded-xl bg-rose-500 hover:bg-rose-600 text-white transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Reset All Data to Sample Dataset</span>
-            </button>
           </div>
         )}
 
