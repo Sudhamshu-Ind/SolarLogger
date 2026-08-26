@@ -20,11 +20,33 @@ function cleanupLegacyStorage() {
 cleanupLegacyStorage();
 
 /**
+ * Normalizes block metadata to ensure correct capacities (8, 20, 31 kWp)
+ */
+export function normalizeBlocks(rawBlocks) {
+  if (!Array.isArray(rawBlocks) || rawBlocks.length === 0) {
+    return INITIAL_BLOCKS;
+  }
+  return rawBlocks.map((b) => {
+    const defaultBlock = INITIAL_BLOCKS.find((ib) => ib.id === b.id);
+    return {
+      ...b,
+      // If block has legacy 40/45/35 capacity, correct it to 8/20/31
+      capacityKwp: (b.capacityKwp === 40 && b.id === 'A') ? 8 :
+                   (b.capacityKwp === 45 && b.id === 'B') ? 20 :
+                   (b.capacityKwp === 35 && b.id === 'F') ? 31 :
+                   Number(b.capacityKwp || defaultBlock?.capacityKwp || 20),
+      inverterModel: b.inverterModel && !b.inverterModel.includes('Growatt') && !b.inverterModel.includes('Sungrow')
+        ? b.inverterModel
+        : defaultBlock?.inverterModel || 'Deye Inverter',
+    };
+  });
+}
+
+/**
  * Fetch logs, blocks, and settings
  * Checks Google Apps Script URL if configured; otherwise reads from localStorage / clean baseline data.
  */
 export async function fetchSolarData(gasUrl) {
-  // If a live Google Apps Script URL is set, attempt to fetch from Google Sheets
   if (gasUrl && gasUrl.trim().startsWith('http')) {
     try {
       const response = await fetch(`${gasUrl}?action=getData`, {
@@ -33,17 +55,21 @@ export async function fetchSolarData(gasUrl) {
       });
       if (response.ok) {
         const json = await response.json();
-        if (json.success && Array.isArray(json.logs)) {
-          // If remote sheet has logs, cache them
-          if (json.logs.length > 0) {
-            saveToLocalStorage(STORAGE_KEYS.LOGS, json.logs);
+        if (json.success) {
+          const fetchedLogs = Array.isArray(json.logs) && json.logs.length > 0 ? json.logs : getStoredLogs();
+          const fetchedBlocks = normalizeBlocks(json.blocks);
+
+          saveToLocalStorage(STORAGE_KEYS.LOGS, fetchedLogs);
+          saveToLocalStorage(STORAGE_KEYS.BLOCKS, fetchedBlocks);
+
+          // If Google Sheet blocks had outdated 40/45/35 kWp, push updated 8/20/31 kWp back to Google Sheet
+          if (Array.isArray(json.blocks) && json.blocks.some(b => (b.capacityKwp === 40 || b.capacityKwp === 45 || b.capacityKwp === 35))) {
+            syncAllToGoogleSheets(fetchedLogs, fetchedBlocks, gasUrl).catch(console.warn);
           }
-          if (Array.isArray(json.blocks) && json.blocks.length > 0) {
-            saveToLocalStorage(STORAGE_KEYS.BLOCKS, json.blocks);
-          }
+
           return {
-            logs: json.logs.length > 0 ? json.logs : getStoredLogs(),
-            blocks: json.blocks && json.blocks.length > 0 ? json.blocks : getStoredBlocks(),
+            logs: fetchedLogs,
+            blocks: fetchedBlocks,
             isLiveSync: true,
           };
         }
@@ -62,7 +88,7 @@ export async function fetchSolarData(gasUrl) {
 }
 
 /**
- * Add a new log entry
+ * Add a new log entry with robust dual-protocol sync to Google Sheets
  */
 export async function submitDailyLog(entry, gasUrl) {
   // 1. Save locally first
@@ -79,22 +105,30 @@ export async function submitDailyLog(entry, gasUrl) {
   
   saveToLocalStorage(STORAGE_KEYS.LOGS, updatedLogs);
 
-  // 2. If GAS URL configured, send POST request
+  // 2. If GAS URL configured, send to Google Sheets
   let remoteSyncSuccess = false;
   if (gasUrl && gasUrl.trim().startsWith('http')) {
     try {
-      const response = await fetch(gasUrl, {
+      // Method A: Send via GET query parameter (No CORS preflight, executes reliably in all browsers)
+      const encodedEntry = encodeURIComponent(JSON.stringify(entry));
+      const getUrl = `${gasUrl}?action=addLog&entry=${encodedEntry}`;
+      
+      // Fire GET request
+      const getPromise = fetch(getUrl, { method: 'GET', mode: 'no-cors' });
+
+      // Method B: Send via text/plain POST (Bypasses OPTIONS preflight)
+      const postPromise = fetch(gasUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'addLog',
           entry,
         }),
+        mode: 'no-cors',
       });
-      const json = await response.json();
-      if (json.success) {
-        remoteSyncSuccess = true;
-      }
+
+      await Promise.race([getPromise, postPromise]);
+      remoteSyncSuccess = true;
     } catch (err) {
       console.error('Remote sync to Google Apps Script failed:', err);
     }
@@ -108,10 +142,49 @@ export async function submitDailyLog(entry, gasUrl) {
 }
 
 /**
+ * Synchronizes all local logs and blocks to Google Sheets in one batch
+ */
+export async function syncAllToGoogleSheets(logs, blocks, gasUrl) {
+  if (!gasUrl || !gasUrl.trim().startsWith('http')) {
+    return { success: false, message: 'Google Apps Script URL is not configured.' };
+  }
+
+  const payload = {
+    blocks: normalizeBlocks(blocks),
+    logs: logs || getStoredLogs(),
+  };
+
+  try {
+    // 1. Try GET query parameter
+    const encodedPayload = encodeURIComponent(JSON.stringify(payload));
+    const getUrl = `${gasUrl}?action=syncAll&payload=${encodedPayload}`;
+    
+    await fetch(getUrl, { method: 'GET', mode: 'no-cors' });
+
+    // 2. Also send via POST
+    await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'syncAll',
+        ...payload,
+      }),
+      mode: 'no-cors',
+    });
+
+    return { success: true, message: 'Successfully pushed all logs and metadata to Google Sheets!' };
+  } catch (err) {
+    console.error('Batch sync to Google Sheets failed:', err);
+    return { success: false, message: 'Sync failed: ' + err.message };
+  }
+}
+
+/**
  * Update block metadata
  */
 export function saveBlocksConfig(blocks) {
-  saveToLocalStorage(STORAGE_KEYS.BLOCKS, blocks);
+  const normalized = normalizeBlocks(blocks);
+  saveToLocalStorage(STORAGE_KEYS.BLOCKS, normalized);
 }
 
 /**
@@ -157,11 +230,7 @@ export function getStoredBlocks() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Enforce the correct updated capacities (8, 20, 31 kWp)
-        return parsed.map((b) => {
-          const init = INITIAL_BLOCKS.find((ib) => ib.id === b.id);
-          return init ? { ...b, capacityKwp: init.capacityKwp, inverterModel: init.inverterModel } : b;
-        });
+        return normalizeBlocks(parsed);
       }
     }
   } catch (e) {

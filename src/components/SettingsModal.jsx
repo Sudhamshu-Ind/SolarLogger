@@ -10,6 +10,7 @@ export default function SettingsModal({
   onSaveBlocks,
   onResetData,
   onZeroiseData,
+  onForceSync,
 }) {
   const [localSettings, setLocalSettings] = useState({ ...settings });
   const [localBlocks, setLocalBlocks] = useState([...blocks]);
@@ -157,7 +158,7 @@ export default function SettingsModal({
               <label className="block font-semibold text-slate-300 mb-1">
                 Google Apps Script Web App URL
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   placeholder="https://script.google.com/macros/s/.../exec"
@@ -165,17 +166,34 @@ export default function SettingsModal({
                   onChange={(e) => setLocalSettings({ ...localSettings, gasWebAppUrl: e.target.value })}
                   className="flex-1 px-3.5 py-2 rounded-xl glass-input text-white font-mono"
                 />
-                <button
-                  type="button"
-                  onClick={handleTestUrl}
-                  disabled={isTestingUrl}
-                  className="px-4 py-2 font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-                >
-                  {isTestingUrl ? 'Testing...' : 'Test Sync'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestUrl}
+                    disabled={isTestingUrl}
+                    className="px-3.5 py-2 font-bold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                  >
+                    {isTestingUrl ? 'Testing...' : 'Test Sync'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (onForceSync) {
+                        setIsTestingUrl(true);
+                        const res = await onForceSync(localSettings.gasWebAppUrl);
+                        setIsTestingUrl(false);
+                        setTestStatus(res);
+                      }
+                    }}
+                    disabled={isTestingUrl}
+                    className="px-3.5 py-2 font-bold rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition"
+                  >
+                    Push All to Sheet
+                  </button>
+                </div>
               </div>
               <span className="text-[11px] text-slate-400 mt-1 block">
-                Connects directly to your Google Sheet without complex OAuth credentials.
+                Connects directly to your Google Sheet. Click <strong>"Push All to Sheet"</strong> to upload all local logs &amp; update BlockMetadata in your Google Sheet immediately.
               </span>
               {testStatus && (
                 <div

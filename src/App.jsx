@@ -15,6 +15,7 @@ import AdminAuthModal from './components/AdminAuthModal';
 import {
   fetchSolarData,
   submitDailyLog,
+  syncAllToGoogleSheets,
   getStoredSettings,
   saveStoredSettings,
   saveBlocksConfig,
@@ -124,6 +125,16 @@ export default function App() {
     setBlocks(res.blocks);
     setSettings(res.settings);
     setIsLiveSync(false);
+  };
+
+  // Handle force sync to Google Sheets
+  const handleForceSyncToSheets = async (targetUrl) => {
+    const url = targetUrl || settings.gasWebAppUrl;
+    const res = await syncAllToGoogleSheets(rawLogs, blocks, url);
+    if (res.success) {
+      setIsLiveSync(true);
+    }
+    return res;
   };
 
   // Admin authentication handlers
@@ -383,6 +394,7 @@ export default function App() {
         onSaveBlocks={handleSaveBlocks}
         onResetData={handleResetData}
         onZeroiseData={handleZeroiseData}
+        onForceSync={handleForceSyncToSheets}
       />
 
       <SetupGuideModal
