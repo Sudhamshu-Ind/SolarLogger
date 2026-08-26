@@ -8,31 +8,31 @@ export const INITIAL_BLOCKS = [
   {
     id: "A",
     name: "Block A (Rooftop Plant)",
-    capacityKwp: 40,
+    capacityKwp: 8,
     inceptionDate: "2026-07-18",
     initialMeterReading: 0,
     color: "#f59e0b", // Amber
-    inverterModel: "Deye SUN-40K-G04 (BLE)",
+    inverterModel: "Deye SUN-8K-G04 (BLE)",
     status: "Active",
   },
   {
     id: "B",
     name: "Block B (Rooftop Plant)",
-    capacityKwp: 45,
+    capacityKwp: 20,
     inceptionDate: "2026-07-18",
     initialMeterReading: 0,
     color: "#0284c7", // Sky Blue
-    inverterModel: "Deye SUN-45K-G04 (BLE)",
+    inverterModel: "Deye SUN-20K-G04 (BLE)",
     status: "Active",
   },
   {
     id: "F",
     name: "Block F (Rooftop Plant)",
-    capacityKwp: 35,
+    capacityKwp: 31,
     inceptionDate: "2026-07-18",
     initialMeterReading: 0,
     color: "#10b981", // Emerald
-    inverterModel: "Deye SUN-35K-G04 (BLE)",
+    inverterModel: "Deye SUN-31K-G04 (BLE)",
     status: "Active",
   },
 ];

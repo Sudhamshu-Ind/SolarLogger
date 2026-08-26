@@ -13,7 +13,7 @@ Designed with a **Smart Pro-Rata Interpolation Engine** to handle intermittent/i
    - **Month-to-Date (MTD) & Daily Average**: Real-time generation velocity.
    - **Financial Savings**: Calculated in INR (₹) using configurable grid tariff (default: ₹8.50/unit).
    - **Environmental Impact**: CO₂ emissions avoided (metric tons) and equivalent trees planted.
-   - **Total Installed Capacity**: 120 kWp across Blocks A (40 kWp), B (45 kWp), and F (35 kWp).
+   - **Total Installed Capacity**: 59 kWp across Blocks A (8 kWp), B (20 kWp), and F (31 kWp).
 
 2. **Smart Pro-Rata & Gap Interpolation Engine**:
    - Maintenance staff don't need to log every day. Whenever a technician logs a reading after a 4-day, 7-day, or multi-week gap, the system **automatically distributes the cumulative meter delta evenly across the missing dates**.

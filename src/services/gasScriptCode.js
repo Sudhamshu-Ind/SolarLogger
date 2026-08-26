@@ -172,9 +172,9 @@ function setupSheetsIfMissing() {
       "BlockId", "BlockName", "CapacityKWp", "InceptionDate", "InitialMeterReading", "Color", "InverterModel", "Status"
     ]);
     // Seed default blocks A, B, F
-    blocksSheet.appendRow(["A", "Block A (Rooftop Plant)", 40, "2026-07-18", 0, "#f59e0b", "Growatt 40KTL3-X", "Active"]);
-    blocksSheet.appendRow(["B", "Block B (Rooftop Plant)", 45, "2026-07-18", 0, "#0284c7", "Sungrow SG45CX", "Active"]);
-    blocksSheet.appendRow(["F", "Block F (Rooftop Plant)", 35, "2026-07-18", 0, "#10b981", "Growatt 35KTL3-X", "Active"]);
+    blocksSheet.appendRow(["A", "Block A (Rooftop Plant)", 8, "2026-07-18", 0, "#f59e0b", "Deye SUN-8K-G04 (BLE)", "Active"]);
+    blocksSheet.appendRow(["B", "Block B (Rooftop Plant)", 20, "2026-07-18", 0, "#0284c7", "Deye SUN-20K-G04 (BLE)", "Active"]);
+    blocksSheet.appendRow(["F", "Block F (Rooftop Plant)", 31, "2026-07-18", 0, "#10b981", "Deye SUN-31K-G04 (BLE)", "Active"]);
     blocksSheet.setFrozenRows(1);
     blocksSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#e0f2fe");
   }

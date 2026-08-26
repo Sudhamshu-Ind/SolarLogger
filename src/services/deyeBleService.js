@@ -4,28 +4,49 @@
  * 
  * Supports:
  * - Deye / Solarman Wi-Fi+BLE Data Logger sticks (LSW-3, DLS-W, DL1000B, etc.)
- * - Standard Transparent UART BLE Services (0xFFE0 / 0x0922 / Nordic UART)
+ * - Standard Transparent UART BLE Services (0xFFE0 / 0xFED5 / 0xFEC7 / 0x0922 / Nordic UART / Microchip)
+ * - Automatic GATT Service & Characteristic Discovery
  * - Modbus RTU 0x03 (Read Holding Registers) framing and CRC16 verification
- * - Built-in Simulation Mode for development & testing without live hardware
+ * - Built-in Simulation Mode & Real-Time Bluetooth Hardware Inspector
  */
 
-// Known GATT Service UUIDs for Deye / Solarman / Generic Solar BLE Dongles
-export const BLE_GATT_SERVICES = {
+// Exhaustive list of known GATT Service UUIDs for Solar Loggers, Inverters & BLE UART Bridges
+export const ALL_SUPPORTED_BLE_SERVICES = [
   // Deye / Solarman Transparent UART Service
-  DEYE_TRANSPARENT: '0000ffe0-0000-1000-8000-00805f9b34fb',
-  DEYE_TX: '0000ffe1-0000-1000-8000-00805f9b34fb', // Write / Notify
-  DEYE_RX: '0000ffe2-0000-1000-8000-00805f9b34fb', // Notify (on some dongles)
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  0xffe0,
+  
+  // Solarman Logger Services
+  '0000fed5-0000-1000-8000-00805f9b34fb',
+  0xfed5,
+  '0000fec7-0000-1000-8000-00805f9b34fb',
+  0xfec7,
+  0x0922,
 
-  // Solarman Alternate Service
-  SOLARMAN_SERVICE_SHORT: 0x0922,
-  SOLARMAN_TX_SHORT: 0x0923,
-  SOLARMAN_RX_SHORT: 0x0924,
+  // Additional Solar / ESP32 / Vendor UART Services
+  '0000fee0-0000-1000-8000-00805f9b34fb',
+  0xfee0,
+  '0000fff0-0000-1000-8000-00805f9b34fb',
+  0xfff0,
+  '0000fe95-0000-1000-8000-00805f9b34fb',
+  0xfe95,
+  '0000ffff-0000-1000-8000-00805f9b34fb',
+  0xffff,
 
-  // Nordic UART Service (Generic BLE fallback)
-  NUS_SERVICE: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-  NUS_TX: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
-  NUS_RX: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
-};
+  // Nordic Semiconductor UART Service (NUS)
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+
+  // Microchip Transparent UART Service
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+
+  // Standard BLE Services
+  '00001800-0000-1000-8000-00805f9b34fb', // Generic Access
+  0x1800,
+  '00001801-0000-1000-8000-00805f9b34fb', // Generic Attribute
+  0x1801,
+  '0000180a-0000-1000-8000-00805f9b34fb', // Device Information
+  0x180a,
+];
 
 /**
  * Checks whether the Web Bluetooth API is supported by the current browser.
@@ -80,7 +101,7 @@ export function buildModbusReadFrame(slaveAddress = 0x01, startRegister = 0x003C
  * 
  * Register Map:
  * - 0x003C (60): Daily Generation (0.1 kWh) -> uint16
- * - 0x003D (61): Reserved / Status
+ * - 0x003D (61): Total Active Power / Status
  * - 0x003E (62): Reserved / Grid status
  * - 0x003F - 0x0040 (63-64): Total Cumulative Generation (0.1 kWh) -> uint32 (Big Endian)
  * - 0x0056 - 0x0057 (86-87): Real-time AC Active Power (0.1 W) -> uint32
@@ -135,14 +156,14 @@ export function parseDeyeModbusResponse(dataBuffer) {
 }
 
 /**
- * Connects to a physical Deye/Solarman inverter via Web Bluetooth API.
- * Reads telemetry registers and returns real-time values.
+ * Connects to any nearby physical Inverter BLE logger via Web Bluetooth API.
+ * Uses broad device matching and dynamic GATT service inspection.
  * 
  * @param {Object} options Configuration callbacks (onProgress, etc.)
- * @returns {Promise<Object>} Extracted solar telemetry data
+ * @returns {Promise<Object>} Extracted solar telemetry data and hardware diagnostics
  */
 export async function connectAndReadDeyeBle(options = {}) {
-  const { onProgress = () => {} } = options;
+  const { onProgress = () => {}, acceptAll = true } = options;
 
   if (!isWebBluetoothSupported()) {
     throw new Error(
@@ -150,88 +171,148 @@ export async function connectAndReadDeyeBle(options = {}) {
     );
   }
 
-  onProgress('Requesting Bluetooth device pairing...');
+  onProgress('Opening Bluetooth pairing window... Select your Inverter Logger.');
 
-  // Step 1: Scan for Deye / Solarman / Generic Inverter Bluetooth Devices
-  const device = await navigator.bluetooth.requestDevice({
-    filters: [
-      { namePrefix: 'Deye' },
-      { namePrefix: 'Solar' },
-      { namePrefix: 'E-Solar' },
-      { namePrefix: 'AP_' },
-      { namePrefix: 'WIFI_' },
-      { namePrefix: 'Growatt' },
-      { namePrefix: 'Sungrow' },
-      { namePrefix: 'BT_' },
-    ],
-    optionalServices: [
-      BLE_GATT_SERVICES.DEYE_TRANSPARENT,
-      BLE_GATT_SERVICES.NUS_SERVICE,
-      0xffe0,
-      0x0922,
-    ],
-  });
+  // Step 1: Scan for Bluetooth devices.
+  // Using acceptAllDevices: true ensures all devices appear even if named by serial number or custom prefix.
+  let device;
+  try {
+    if (acceptAll) {
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ALL_SUPPORTED_BLE_SERVICES,
+      });
+    } else {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { namePrefix: 'Deye' },
+          { namePrefix: 'Solar' },
+          { namePrefix: 'LSW' },
+          { namePrefix: 'DLS' },
+          { namePrefix: 'E-Solar' },
+          { namePrefix: 'AP_' },
+          { namePrefix: 'WIFI_' },
+          { namePrefix: 'ESP' },
+          { namePrefix: 'BT_' },
+          { namePrefix: 'SUN' },
+          { namePrefix: '2' }, // Serial numbers often start with 2
+          { namePrefix: '1' },
+          { namePrefix: '3' },
+          { namePrefix: '4' },
+        ],
+        optionalServices: ALL_SUPPORTED_BLE_SERVICES,
+      });
+    }
+  } catch (err) {
+    if (err.name === 'NotFoundError') {
+      throw new Error('Bluetooth pairing cancelled or no device was selected.');
+    }
+    throw err;
+  }
 
-  onProgress(`Connecting to ${device.name || 'Inverter BLE Logger'}...`);
+  onProgress(`Connecting to GATT Server on ${device.name || 'Bluetooth Device'} (${device.id.slice(0, 8)}...)...`);
 
   // Step 2: Connect to GATT Server
   const server = await device.gatt.connect();
 
-  onProgress('Discovering Inverter Communication Service...');
+  onProgress('Inspecting primary GATT Services & Characteristics on device...');
 
-  // Try known primary services
-  let service = null;
-  let txChar = null;
-  let rxChar = null;
-
+  // Step 3: Discover all available services
+  let primaryServices = [];
   try {
-    service = await server.getPrimaryService(BLE_GATT_SERVICES.DEYE_TRANSPARENT);
-    txChar = await service.getCharacteristic(BLE_GATT_SERVICES.DEYE_TX);
-    try {
-      rxChar = await service.getCharacteristic(BLE_GATT_SERVICES.DEYE_RX);
-    } catch {
-      // Some dongles use the same characteristic for TX and RX notifications
-      rxChar = txChar;
-    }
+    primaryServices = await server.getPrimaryServices();
   } catch (err) {
-    console.warn('Standard Deye UUID not found, trying fallback services...', err);
+    console.warn('Could not enumerate all services, falling back to declared list...', err);
+  }
+
+  const discoveredServicesReport = [];
+  let writableChar = null;
+  let notifiableChar = null;
+
+  for (const s of primaryServices) {
+    const sUuid = s.uuid.toLowerCase();
     try {
-      service = await server.getPrimaryService(BLE_GATT_SERVICES.NUS_SERVICE);
-      txChar = await service.getCharacteristic(BLE_GATT_SERVICES.NUS_TX);
-      rxChar = await service.getCharacteristic(BLE_GATT_SERVICES.NUS_RX);
-    } catch (err2) {
-      throw new Error(
-        'Connected to Bluetooth device, but could not find a supported Deye/Modbus Serial Service. Please ensure the logger stick firmware is up to date.'
-      );
+      const chars = await s.getCharacteristics();
+      const charInfos = [];
+
+      for (const c of chars) {
+        const props = [];
+        if (c.properties.read) props.push('read');
+        if (c.properties.write) props.push('write');
+        if (c.properties.writeWithoutResponse) props.push('writeWithoutResponse');
+        if (c.properties.notify) props.push('notify');
+        if (c.properties.indicate) props.push('indicate');
+
+        charInfos.push({
+          uuid: c.uuid,
+          properties: props,
+        });
+
+        // Identify write channel
+        if (!writableChar && (c.properties.write || c.properties.writeWithoutResponse)) {
+          writableChar = c;
+        }
+
+        // Identify notify channel
+        if (!notifiableChar && (c.properties.notify || c.properties.indicate)) {
+          notifiableChar = c;
+        }
+      }
+
+      discoveredServicesReport.push({
+        serviceUuid: s.uuid,
+        characteristics: charInfos,
+      });
+    } catch (charErr) {
+      discoveredServicesReport.push({
+        serviceUuid: s.uuid,
+        characteristics: [],
+        error: charErr.message,
+      });
     }
   }
 
-  onProgress('Subscribing to telemetry notifications...');
+  // If notifiable characteristic is still null but writable exists and supports notify
+  if (writableChar && !notifiableChar && (writableChar.properties.notify || writableChar.properties.indicate)) {
+    notifiableChar = writableChar;
+  }
 
-  // Step 3: Set up notification listener for Modbus response
+  if (!writableChar || !notifiableChar) {
+    // Generate detailed diagnostic report
+    const serviceList = discoveredServicesReport.map((s) => s.serviceUuid).join(', ') || 'None detected';
+    throw new Error(
+      `Connected to "${device.name || 'Device'}", but no bidirectional serial characteristic was found. Discovered Services: [${serviceList}]. If this is a Solarman stick, it may be in Wi-Fi provisioning mode. Stand within range and ensure the mobile app is closed.`
+    );
+  }
+
+  onProgress(`Found serial channel on ${device.name || 'Logger'}. Subscribing to telemetry notifications...`);
+
+  // Step 4: Setup notification listener
   const responsePromise = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error('Inverter response timed out (no data received after 8 seconds).'));
+      reject(new Error('Inverter response timed out (no data received after 8 seconds). The logger may be in Wi-Fi mode or requires active solar generation.'));
     }, 8000);
 
     const handleNotification = (event) => {
       clearTimeout(timeout);
       const value = event.target.value;
       const rawBytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-      rxChar.removeEventListener('characteristicvaluechanged', handleNotification);
+      try {
+        notifiableChar.removeEventListener('characteristicvaluechanged', handleNotification);
+      } catch {}
       resolve(rawBytes);
     };
 
-    rxChar.addEventListener('characteristicvaluechanged', handleNotification);
+    notifiableChar.addEventListener('characteristicvaluechanged', handleNotification);
   });
 
-  await rxChar.startNotifications();
+  await notifiableChar.startNotifications();
 
   onProgress('Sending Modbus RTU Read Command (Holding Regs 0x003C - 0x0041)...');
 
-  // Step 4: Transmit Modbus Query Frame
+  // Step 5: Transmit Modbus Query Frame
   const queryFrame = buildModbusReadFrame(0x01, 0x003C, 0x0006);
-  await txChar.writeValue(queryFrame);
+  await writableChar.writeValue(queryFrame);
 
   onProgress('Waiting for Inverter data stream...');
   const responseBytes = await responsePromise;
@@ -239,10 +320,11 @@ export async function connectAndReadDeyeBle(options = {}) {
   onProgress('Decoding inverter telemetry payload...');
   const telemetry = parseDeyeModbusResponse(responseBytes);
 
-  // Add device metadata
+  // Add device metadata & hardware diagnostics
   telemetry.deviceName = device.name || 'Deye Inverter Logger';
   telemetry.deviceId = device.id;
   telemetry.connectionType = 'LIVE_BLE';
+  telemetry.diagnostics = discoveredServicesReport;
 
   return telemetry;
 }
@@ -268,9 +350,8 @@ export async function simulateDeyeBleRead(block, lastKnownEntry = null, options 
   onProgress('Querying Modbus registers (0x003C: Daily kWh, 0x003F: Total kWh, 0x0056: Active kW)...');
   await new Promise((r) => setTimeout(r, delayMs * 0.3));
 
-  // Generate realistic numbers based on capacity
-  // Average Chennai daily generation is ~4.0 - 4.8 kWh / kWp
-  const capacity = Number(block.capacityKwp || 40);
+  // Generate realistic numbers based on actual capacity (8 kWp, 20 kWp, or 31 kWp)
+  const capacity = Number(block.capacityKwp || 20);
   const now = new Date();
   const currentHour = now.getHours() + now.getMinutes() / 60;
 
@@ -282,16 +363,16 @@ export async function simulateDeyeBleRead(block, lastKnownEntry = null, options 
     dayFraction = 0.05;
   }
 
-  const expectedFullDayYield = Number((capacity * (3.8 + Math.random() * 0.8)).toFixed(2));
+  const expectedFullDayYield = Number((capacity * (4.0 + Math.random() * 0.5)).toFixed(2));
   const simDailyUnits = Number((expectedFullDayYield * dayFraction).toFixed(1));
 
   const baseMeter = lastKnownEntry?.cumulativeUnits
     ? Number(lastKnownEntry.cumulativeUnits)
-    : Number(block.initialMeterReading || 12000);
+    : Number(block.initialMeterReading || (capacity * 120));
 
   const simCumulativeUnits = Number((baseMeter + simDailyUnits).toFixed(1));
-  const activePowerKw = Number(((capacity * (0.65 + Math.random() * 0.25)) * (dayFraction > 0.1 ? 1 : 0)).toFixed(2));
-  const internalTemp = Number((38.5 + Math.random() * 6).toFixed(1));
+  const activePowerKw = Number(((capacity * (0.68 + Math.random() * 0.22)) * (dayFraction > 0.1 ? 1 : 0)).toFixed(2));
+  const internalTemp = Number((38.5 + Math.random() * 5).toFixed(1));
 
   onProgress('Data successfully decoded from Inverter BLE Logger!');
 

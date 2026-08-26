@@ -15,6 +15,10 @@ import {
   Flame,
   Info,
   Layers,
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   isWebBluetoothSupported,
@@ -36,7 +40,9 @@ export default function BleInverterScannerModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [telemetry, setTelemetry] = useState(null);
   const [showHex, setShowHex] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [useSimulation, setUseSimulation] = useState(false);
+  const [scanMode, setScanMode] = useState('all'); // 'all' (acceptAllDevices) | 'filtered'
 
   const isBluetoothSupported = isWebBluetoothSupported();
 
@@ -53,6 +59,7 @@ export default function BleInverterScannerModal({
       setErrorMsg('');
       setTelemetry(null);
       setShowHex(false);
+      setShowDiagnostics(false);
     }
   }, [isOpen]);
 
@@ -86,6 +93,7 @@ export default function BleInverterScannerModal({
       } else {
         setStatus('reading');
         result = await connectAndReadDeyeBle({
+          acceptAll: scanMode === 'all',
           onProgress: (msg) => setProgressMsg(msg),
         });
       }
@@ -97,7 +105,7 @@ export default function BleInverterScannerModal({
       console.error('BLE connection error:', err);
       setStatus('error');
       setErrorMsg(
-        err.message || 'Failed to communicate with the Inverter BLE logger. Ensure Bluetooth is enabled and the inverter is within range.'
+        err.message || 'Failed to communicate with the Inverter BLE logger. Ensure Bluetooth is enabled, the inverter is within range (~10m), and the phone app is closed.'
       );
     }
   };
@@ -116,7 +124,7 @@ export default function BleInverterScannerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
       <div className="glass-panel w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl p-6 relative overflow-hidden max-h-[92vh] flex flex-col">
         {/* Decorative background glow */}
         <div
@@ -133,7 +141,7 @@ export default function BleInverterScannerModal({
         </button>
 
         {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 mb-4">
           <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
             <Bluetooth className="w-6 h-6 animate-pulse" />
           </div>
@@ -150,11 +158,16 @@ export default function BleInverterScannerModal({
           </div>
         </div>
 
-        {/* Block Selector */}
-        <div className="mb-4">
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
-            Target Rooftop Substation
+        {/* Target Substation Selector */}
+        <div className="mb-3">
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              Target Rooftop Substation
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Select the building where you are currently standing
+            </span>
           </label>
           <div className="grid grid-cols-3 gap-2">
             {blocks.map((b) => {
@@ -181,7 +194,7 @@ export default function BleInverterScannerModal({
                       style={{ backgroundColor: b.color }}
                     />
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400 mt-1">
+                  <span className="text-[11px] font-mono text-cyan-300 font-bold mt-1">
                     {b.capacityKwp} kWp • {b.inverterModel || 'Inverter'}
                   </span>
                 </button>
@@ -190,34 +203,55 @@ export default function BleInverterScannerModal({
           </div>
         </div>
 
-        {/* Web Bluetooth Compatibility Warning if not supported */}
-        {!isBluetoothSupported && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2.5">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-400" />
-            <div>
-              <span className="font-semibold">Web Bluetooth API not detected in this browser.</span>
-              <p className="text-[11px] text-amber-400/80 mt-0.5">
-                Chrome & Edge (Desktop & Android) support Web Bluetooth natively. You can use the built-in <strong>BLE Simulator</strong> below for testing.
-              </p>
-            </div>
+        {/* Rooftop Bluetooth Range Advisory */}
+        <div className="mb-3 p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs flex items-start gap-2.5">
+          <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-cyan-400" />
+          <div className="text-[11px] leading-relaxed">
+            <strong>Rooftop Proximity:</strong> Bluetooth LE range is <strong>10–15 meters</strong>. If you are standing on Block F rooftop, Block A &amp; B inverters will not show up. You must be on the terrace of the respective block.
           </div>
-        )}
+        </div>
 
         {/* Center Scanner Action & Status Area */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-3 pr-1">
           {status === 'idle' && (
-            <div className="p-6 rounded-2xl bg-slate-900/70 border border-slate-800 text-center flex flex-col items-center justify-center space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                <Radio className="w-8 h-8 animate-pulse" />
+            <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 text-center flex flex-col items-center justify-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                <Radio className="w-7 h-7 animate-pulse" />
               </div>
               <div className="max-w-md">
-                <h3 className="text-sm font-bold text-white">Ready to Connect to Inverter Logger</h3>
+                <h3 className="text-sm font-bold text-white">Ready to Pair with {currentBlock?.name} ({currentBlock?.capacityKwp} kWp)</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Ensure you are standing within 10–15 meters of the {currentBlock?.name} inverter on the rooftop and the official mobile app is closed.
+                  Ensure the official Deye/Solarman phone app is closed on your mobile device.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              {/* Scan Mode Toggle */}
+              <div className="flex items-center gap-2 p-1 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setScanMode('all')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                    scanMode === 'all'
+                      ? 'bg-cyan-500 text-slate-950 font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🌐 Show All Nearby Devices (Recommended)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanMode('filtered')}
+                  className={`px-3 py-1.5 rounded-lg font-semibold transition ${
+                    scanMode === 'filtered'
+                      ? 'bg-cyan-500 text-slate-950 font-bold'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ Solar-Name Filter Only
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => handleStartBleScan(false)}
@@ -254,7 +288,7 @@ export default function BleInverterScannerModal({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-cyan-300">
-                  {status === 'scanning' ? 'Searching for Nearby BLE Inverter...' : 'Querying Modbus Holding Registers...'}
+                  {status === 'scanning' ? 'Scanning for Inverter Bluetooth Dongle...' : 'Querying Modbus Holding Registers...'}
                 </h3>
                 <p className="text-xs text-slate-400 font-mono mt-1 animate-pulse">
                   {progressMsg || 'Communicating with Bluetooth GATT server...'}
@@ -264,15 +298,25 @@ export default function BleInverterScannerModal({
           )}
 
           {status === 'error' && (
-            <div className="p-5 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-3">
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-3">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-bold text-rose-300">Bluetooth Communication Error</h4>
+                  <h4 className="text-sm font-bold text-rose-300">Bluetooth Communication Notice</h4>
                   <p className="text-xs text-rose-400/90 mt-1 leading-relaxed">{errorMsg}</p>
                 </div>
               </div>
-              <div className="pt-2 flex items-center gap-3">
+
+              {/* Troubleshooting Tips */}
+              <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+                <span className="font-bold text-white block">Troubleshooting Checklist:</span>
+                <p>1. <strong>Distance:</strong> Stand directly next to the inverter (under 5–10m).</p>
+                <p>2. <strong>Solar Power:</strong> Inverter loggers power down after sunset. Data reading requires daytime solar generation.</p>
+                <p>3. <strong>App Disconnect:</strong> Close the official Solarman/Deye app on all phones so the logger stick releases the BLE channel.</p>
+                <p>4. <strong>Device Selection:</strong> If the dongle is named after its serial number (e.g. <code>24...</code> or <code>LSW3...</code>), select it from the browser popup.</p>
+              </div>
+
+              <div className="pt-1 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => handleStartBleScan(false)}
@@ -359,20 +403,48 @@ export default function BleInverterScannerModal({
                   </span>
                 </div>
 
-                {/* Raw Hex toggle */}
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowHex(!showHex)}
-                    className="text-[11px] text-slate-500 hover:text-slate-400 font-mono flex items-center gap-1"
-                  >
-                    <Cpu className="w-3 h-3" />
-                    {showHex ? 'Hide Modbus Raw Frame' : 'View Modbus Raw Frame'}
-                  </button>
+                {/* Raw Hex & Diagnostics toggle */}
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowHex(!showHex)}
+                      className="text-[11px] text-slate-400 hover:text-slate-300 font-mono flex items-center gap-1"
+                    >
+                      <Cpu className="w-3 h-3" />
+                      {showHex ? 'Hide Modbus Raw Frame' : 'View Modbus Raw Frame'}
+                    </button>
+                    {telemetry.diagnostics && (
+                      <button
+                        type="button"
+                        onClick={() => setShowDiagnostics(!showDiagnostics)}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono flex items-center gap-1"
+                      >
+                        <SlidersHorizontal className="w-3 h-3" />
+                        {showDiagnostics ? 'Hide GATT Services' : 'Inspect GATT Services'}
+                      </button>
+                    )}
+                  </div>
 
                   {showHex && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-black/60 border border-slate-800 font-mono text-[11px] text-cyan-400 overflow-x-auto">
+                    <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800 font-mono text-[11px] text-cyan-400 overflow-x-auto">
                       <code>{telemetry.rawHex || '01 03 0C 00 ...'}</code>
+                    </div>
+                  )}
+
+                  {showDiagnostics && telemetry.diagnostics && (
+                    <div className="p-3 rounded-lg bg-black/70 border border-slate-800 space-y-2 text-[10px] font-mono text-slate-300 max-h-40 overflow-y-auto">
+                      <span className="font-bold text-white block">Discovered GATT Services:</span>
+                      {telemetry.diagnostics.map((s, idx) => (
+                        <div key={idx} className="p-1.5 rounded bg-slate-900 border border-slate-800">
+                          <span className="text-amber-400 block">Service: {s.serviceUuid}</span>
+                          {s.characteristics && s.characteristics.map((c, cIdx) => (
+                            <div key={cIdx} className="pl-3 text-slate-400">
+                              Char: {c.uuid} ({c.properties.join(', ')})
+                            </div>
+                          ))}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -382,7 +454,7 @@ export default function BleInverterScannerModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
