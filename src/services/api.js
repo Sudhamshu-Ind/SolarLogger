@@ -1,5 +1,6 @@
 import { SAMPLE_LOG_ENTRIES } from '../mock/sampleData';
 import { INITIAL_BLOCKS, DEFAULT_SETTINGS } from '../config/defaultSettings';
+import { normalizeDateToYMD } from './proRataEngine';
 
 const STORAGE_KEYS = {
   LOGS: 'cg_solar_logs_v2',
@@ -91,16 +92,22 @@ export async function fetchSolarData(gasUrl) {
  * Add a new log entry with robust dual-protocol sync to Google Sheets
  */
 export async function submitDailyLog(entry, gasUrl) {
+  // Normalize entry date to valid YYYY-MM-DD
+  const normalizedEntry = {
+    ...entry,
+    date: normalizeDateToYMD(entry.date, '2026-08-26'),
+  };
+
   // 1. Save locally first
   const currentLogs = getStoredLogs();
   
   // Check if an entry for this block & date already exists; update it or append
-  const existingIdx = currentLogs.findIndex((l) => l.block === entry.block && l.date === entry.date);
+  const existingIdx = currentLogs.findIndex((l) => l.block === normalizedEntry.block && l.date === normalizedEntry.date);
   let updatedLogs = [...currentLogs];
   if (existingIdx >= 0) {
-    updatedLogs[existingIdx] = { ...updatedLogs[existingIdx], ...entry };
+    updatedLogs[existingIdx] = { ...updatedLogs[existingIdx], ...normalizedEntry };
   } else {
-    updatedLogs.push(entry);
+    updatedLogs.push(normalizedEntry);
   }
   
   saveToLocalStorage(STORAGE_KEYS.LOGS, updatedLogs);
@@ -215,7 +222,12 @@ export function getStoredLogs() {
     const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((l) => ({
+          ...l,
+          date: normalizeDateToYMD(l.date, '2026-07-18'),
+        }));
+      }
     }
   } catch (e) {
     console.error('Failed to parse logs from localStorage', e);

@@ -1,18 +1,81 @@
 import { parseISO, format, differenceInCalendarDays, addDays } from 'date-fns';
 
 /**
+ * Normalizes any date string (ISO, DD-MM-YYYY, DD/MM/YYYY, DD-MM-YY, or Google Sheet strings)
+ * into a canonical YYYY-MM-DD string with year 2026.
+ */
+export function normalizeDateToYMD(input, fallback = '2026-07-18') {
+  if (!input) return fallback;
+  if (input instanceof Date && !isNaN(input.getTime())) {
+    let y = input.getFullYear();
+    if (y < 2020) y = 2026;
+    const m = String(input.getMonth() + 1).padStart(2, '0');
+    const d = String(input.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const str = String(input).trim();
+
+  // Pattern 1: YYYY-MM-DD (e.g. 2026-08-26 or 2001-08-26)
+  const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymdMatch) {
+    let year = parseInt(ymdMatch[1], 10);
+    const month = String(parseInt(ymdMatch[2], 10)).padStart(2, '0');
+    const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
+    if (year < 2020) year = 2026;
+    return `${year}-${month}-${day}`;
+  }
+
+  // Pattern 2: DD-MM-YYYY or DD/MM/YYYY (e.g. 26-08-2026 or 26/08/2026)
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmyMatch) {
+    const day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
+    const month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+    let year = parseInt(dmyMatch[3], 10);
+    if (year < 2020) year = 2026;
+    return `${year}-${month}-${day}`;
+  }
+
+  // Pattern 3: DD-MM-YY or DD/MM/YY (e.g. 26-08-26 or 01-08-26)
+  const shortMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
+  if (shortMatch) {
+    const p1 = parseInt(shortMatch[1], 10);
+    const p2 = parseInt(shortMatch[2], 10);
+    const p3 = parseInt(shortMatch[3], 10);
+    if (p3 === 26) {
+      return `2026-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+    }
+    if (p1 === 26) {
+      return `2026-${String(p2).padStart(2, '0')}-${String(p3).padStart(2, '0')}`;
+    }
+    return `2026-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+  }
+
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      let year = d.getFullYear();
+      if (year < 2020) year = 2026;
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch {}
+
+  return fallback;
+}
+
+/**
  * Safely parses any date string / Date object to a valid Date object or fallback
  */
 export function safeParseDate(input, fallback = new Date('2026-07-18')) {
   if (!input) return fallback;
   if (input instanceof Date && !isNaN(input.getTime())) return input;
   try {
-    const str = String(input).trim();
-    if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-      const parsed = parseISO(str.substring(0, 10));
-      if (!isNaN(parsed.getTime())) return parsed;
-    }
-    const d = new Date(input);
+    const ymd = normalizeDateToYMD(input);
+    const parsed = parseISO(ymd);
+    if (!isNaN(parsed.getTime())) return parsed;
+    const d = new Date(ymd);
     if (!isNaN(d.getTime())) return d;
   } catch {}
   return fallback;
@@ -23,12 +86,10 @@ export function safeParseDate(input, fallback = new Date('2026-07-18')) {
  */
 export function safeFormatDate(input, formatPattern = 'yyyy-MM-dd', fallbackStr = '2026-07-18') {
   try {
-    const d = safeParseDate(input, null);
+    const ymd = normalizeDateToYMD(input, fallbackStr);
+    const d = parseISO(ymd);
     if (d && !isNaN(d.getTime())) {
       return format(d, formatPattern);
-    }
-    if (typeof input === 'string' && input.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(input)) {
-      return input.substring(0, 10);
     }
   } catch {}
   return fallbackStr;
@@ -48,7 +109,7 @@ export function buildContinuousSolarSeries(rawEntries = [], blocks = []) {
   // Process each block independently
   blocks.forEach((block) => {
     const blockId = block.id;
-    const inceptionDateStr = safeFormatDate(block.inceptionDate, 'yyyy-MM-dd', '2026-07-18');
+    const inceptionDateStr = normalizeDateToYMD(block.inceptionDate, '2026-07-18');
     const initialMeter = Number(block.initialMeterReading || 0);
 
     // Filter, clean and sort entries for this block
@@ -56,7 +117,7 @@ export function buildContinuousSolarSeries(rawEntries = [], blocks = []) {
       .filter((e) => e && e.block === blockId && e.date)
       .map((e) => ({
         ...e,
-        dateStr: safeFormatDate(e.date, 'yyyy-MM-dd', inceptionDateStr),
+        dateStr: normalizeDateToYMD(e.date, inceptionDateStr),
         cumulativeUnits: Number(e.cumulativeUnits || 0),
         dailyUnits: e.dailyUnits !== undefined && e.dailyUnits !== null && e.dailyUnits !== '' ? Number(e.dailyUnits) : null,
         isManualEntry: e.isManualEntry !== false,

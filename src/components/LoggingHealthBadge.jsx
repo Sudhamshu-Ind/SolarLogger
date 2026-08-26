@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, Clock, PlusCircle, CheckCircle, AlertTriangle, AlertOctagon, Zap, Bluetooth } from 'lucide-react';
+import { safeFormatDate } from '../services/proRataEngine';
 
 export default function LoggingHealthBadge({ blocks, blockLatestStatus, onLogBlock, onBleScanBlock }) {
   return (
@@ -8,7 +9,7 @@ export default function LoggingHealthBadge({ blocks, blockLatestStatus, onLogBlo
         <div>
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Activity className="w-4 h-4 text-amber-400" />
-            <span>Rooftop Substation Status & Logging Health</span>
+            <span>Rooftop Substation Status &amp; Logging Health</span>
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
             Intermittent readings are automatically pro-rated across missing days until next meter check.
@@ -65,7 +66,9 @@ export default function LoggingHealthBadge({ blocks, blockLatestStatus, onLogBlo
               <div className="mt-3 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Last Reading</span>
-                  <span className="font-mono font-semibold text-slate-200">{status.lastLoggedDate}</span>
+                  <span className="font-mono font-semibold text-slate-200">
+                    {safeFormatDate(status.lastLoggedDate, 'dd MMM yyyy')}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Meter Value</span>
