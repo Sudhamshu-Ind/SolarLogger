@@ -33,6 +33,12 @@ function doGet(e) {
       return jsonResponse({ success: true, result });
     }
 
+    if (action === "updateBlocks" && e && e.parameter && e.parameter.blocks) {
+      const blocks = JSON.parse(decodeURIComponent(e.parameter.blocks));
+      updateAllBlocks(blocks);
+      return jsonResponse({ success: true, message: "Block metadata updated" });
+    }
+
     if (action === "syncAll" && e && e.parameter && e.parameter.payload) {
       const payload = JSON.parse(decodeURIComponent(e.parameter.payload));
       if (payload.blocks && Array.isArray(payload.blocks)) {
@@ -146,7 +152,8 @@ function fetchAllData() {
         initialMeterReading: Number(row[4] || 0),
         color: String(row[5] || "#f59e0b"),
         inverterModel: String(row[6] || "Deye Inverter"),
-        status: String(row[7] || "Active")
+        status: String(row[7] || "Active"),
+        phase: Number(row[8] || (["A", "B", "F"].includes(String(row[0])) ? 1 : 2))
       });
     }
   }
@@ -217,7 +224,7 @@ function updateAllBlocks(blocksList) {
   }
 
   sheet.appendRow([
-    "BlockId", "BlockName", "CapacityKWp", "InceptionDate", "InitialMeterReading", "Color", "InverterModel", "Status"
+    "BlockId", "BlockName", "CapacityKWp", "InceptionDate", "InitialMeterReading", "Color", "InverterModel", "Status", "Phase"
   ]);
 
   blocksList.forEach(b => {
@@ -229,12 +236,13 @@ function updateAllBlocks(blocksList) {
       Number(b.initialMeterReading || 0),
       b.color || "#f59e0b",
       b.inverterModel || "Deye Inverter",
-      b.status || "Active"
+      b.status || "Active",
+      Number(b.phase || (["A", "B", "F"].includes(String(b.id)) ? 1 : 2))
     ]);
   });
 
   sheet.setFrozenRows(1);
-  sheet.getRange("A1:H1").setFontWeight("bold").setBackground("#e0f2fe");
+  sheet.getRange("A1:I1").setFontWeight("bold").setBackground("#e0f2fe");
 }
 
 function setupSheetsIfMissing() {

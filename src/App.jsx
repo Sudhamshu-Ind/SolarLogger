@@ -16,6 +16,7 @@ import {
   fetchSolarData,
   submitDailyLog,
   syncAllToGoogleSheets,
+  syncBlocksToGoogleSheets,
   getStoredSettings,
   saveStoredSettings,
   saveBlocksConfig,
@@ -104,9 +105,19 @@ export default function App() {
   };
 
   // Handle blocks update
-  const handleSaveBlocks = (newBlocks) => {
+  const handleSaveBlocks = async (newBlocks) => {
     setBlocks(newBlocks);
     saveBlocksConfig(newBlocks);
+    if (settings.gasWebAppUrl) {
+      try {
+        const res = await syncBlocksToGoogleSheets(newBlocks, settings.gasWebAppUrl);
+        if (res && res.success) {
+          setIsLiveSync(true);
+        }
+      } catch (err) {
+        console.warn('Auto sync blocks to Google Sheets error:', err);
+      }
+    }
   };
 
   // Handle data reset

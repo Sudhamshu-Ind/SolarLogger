@@ -11,7 +11,23 @@ export default function LogTable({ rawLogs, dailySeries, blocks, onExportCsv }) 
   // Flatten continuous or raw rows
   const tableRows = useMemo(() => {
     if (viewMode === 'raw') {
-      return [...rawLogs]
+      const seen = new Map();
+      rawLogs.forEach((log) => {
+        if (!log || !log.date || !log.block) return;
+        const key = `${log.date}_${log.block}`;
+        if (!seen.has(key)) {
+          seen.set(key, log);
+        } else {
+          const existing = seen.get(key);
+          const newTime = new Date(log.timestamp || 0).getTime();
+          const existingTime = new Date(existing.timestamp || 0).getTime();
+          if (newTime > existingTime || (newTime === existingTime && Number(log.cumulativeUnits || 0) >= Number(existing.cumulativeUnits || 0))) {
+            seen.set(key, log);
+          }
+        }
+      });
+
+      return Array.from(seen.values())
         .sort((a, b) => b.date.localeCompare(a.date))
         .map((log, idx) => ({
           id: `raw-${idx}-${log.date}-${log.block}`,

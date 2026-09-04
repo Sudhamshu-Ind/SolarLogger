@@ -17,6 +17,7 @@ export default function SettingsModal({
   const [testStatus, setTestStatus] = useState(null);
   const [activeTab, setActiveTab] = useState('general'); // 'general' | 'blocks' | 'reset'
   const [isTestingUrl, setIsTestingUrl] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,19 +54,28 @@ export default function SettingsModal({
   };
 
   const handleAddBlock = () => {
-    const nextLetter = String.fromCharCode(65 + localBlocks.length); // Next alphabet
-    const colors = ['#f59e0b', '#0284c7', '#10b981', '#a855f7', '#ec4899', '#f97316'];
+    const usedIds = new Set(localBlocks.map((b) => String(b.id || '').toUpperCase().trim()));
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let nextLetter = 'G';
+    for (let char of alphabet) {
+      if (!usedIds.has(char)) {
+        nextLetter = char;
+        break;
+      }
+    }
+    const colors = ['#f59e0b', '#0284c7', '#10b981', '#a855f7', '#ec4899', '#f97316', '#06b6d4'];
     const assignedColor = colors[localBlocks.length % colors.length];
 
     const newBlock = {
       id: nextLetter,
       name: `Block ${nextLetter} (Rooftop Plant)`,
-      capacityKwp: 40,
-      inceptionDate: '2026-07-18',
+      capacityKwp: 15,
+      inceptionDate: new Date().toISOString().substring(0, 10),
       initialMeterReading: 0,
       color: assignedColor,
-      inverterModel: 'Growatt 40KTL3-X',
+      inverterModel: 'Deye SUN-15K-G04 (BLE)',
       status: 'Active',
+      phase: 2,
     };
     setLocalBlocks([...localBlocks, newBlock]);
   };
@@ -78,21 +88,45 @@ export default function SettingsModal({
     setLocalBlocks(localBlocks.filter((b) => b.id !== blockId));
   };
 
-  const handleBlockChange = (blockId, field, value) => {
+  const handleBlockChange = (originalBlockId, field, value) => {
     setLocalBlocks(
       localBlocks.map((b) => {
-        if (b.id === blockId) {
-          return { ...b, [field]: field === 'capacityKwp' || field === 'initialMeterReading' ? Number(value) : value };
+        if (b.id === originalBlockId) {
+          let processedVal = value;
+          if (field === 'capacityKwp' || field === 'initialMeterReading' || field === 'phase') {
+            processedVal = Number(value);
+          } else if (field === 'id') {
+            processedVal = String(value).toUpperCase().trim();
+          }
+          return { ...b, [field]: processedVal };
         }
         return b;
       })
     );
   };
 
-  const handleSaveAll = () => {
-    onSaveSettings(localSettings);
-    onSaveBlocks(localBlocks);
-    onClose();
+  const handleSaveAll = async () => {
+    // Validate unique IDs
+    const ids = localBlocks.map((b) => String(b.id || '').trim().toUpperCase());
+    if (ids.some((id) => !id)) {
+      alert('Every block must have a non-empty Block ID.');
+      return;
+    }
+    if (new Set(ids).size !== ids.length) {
+      alert('Error: Each block must have a unique Block ID / Letter (e.g. A, B, F, G, K).');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      onSaveSettings(localSettings);
+      await onSaveBlocks(localBlocks);
+      onClose();
+    } catch (err) {
+      alert('Failed to save settings: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -301,31 +335,44 @@ export default function SettingsModal({
                 className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1">
                     <input
                       type="color"
                       value={block.color}
                       onChange={(e) => handleBlockChange(block.id, 'color', e.target.value)}
-                      className="w-6 h-6 rounded-lg cursor-pointer bg-transparent border-0"
+                      className="w-7 h-7 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      title="Block Accent Color"
                     />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">ID:</span>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={block.id}
+                        onChange={(e) => handleBlockChange(block.id, 'id', e.target.value)}
+                        className="w-12 px-2 py-1 rounded-lg glass-input text-amber-400 font-bold text-xs text-center font-mono"
+                        title="Substation Letter/Code (e.g. A, B, F, G, K)"
+                      />
+                    </div>
                     <input
                       type="text"
                       value={block.name}
                       onChange={(e) => handleBlockChange(block.id, 'name', e.target.value)}
-                      className="px-2.5 py-1 rounded-lg glass-input text-white font-bold text-xs"
+                      className="flex-1 px-2.5 py-1 rounded-lg glass-input text-white font-bold text-xs min-w-[140px]"
+                      placeholder="Block Name"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveBlock(block.id)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                    className="p-1.5 ml-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
                     title="Remove Block"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-400 uppercase font-semibold">Capacity (kWp)</label>
                     <input
@@ -334,6 +381,17 @@ export default function SettingsModal({
                       onChange={(e) => handleBlockChange(block.id, 'capacityKwp', e.target.value)}
                       className="w-full px-2 py-1 text-xs rounded-lg glass-input text-white font-mono"
                     />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Phase</label>
+                    <select
+                      value={block.phase || (['A', 'B', 'F'].includes(block.id) ? 1 : 2)}
+                      onChange={(e) => handleBlockChange(block.id, 'phase', e.target.value)}
+                      className="w-full px-2 py-1 text-xs rounded-lg glass-input text-white bg-slate-900 font-semibold"
+                    >
+                      <option value={1}>Phase 1</option>
+                      <option value={2}>Phase 2</option>
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] text-slate-400 uppercase font-semibold">Inception Date</label>
@@ -345,7 +403,7 @@ export default function SettingsModal({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Initial Meter (kWh)</label>
+                    <label className="text-[10px] text-slate-400 uppercase font-semibold">Initial Meter</label>
                     <input
                       type="number"
                       value={block.initialMeterReading || 0}
@@ -353,7 +411,7 @@ export default function SettingsModal({
                       className="w-full px-2 py-1 text-xs rounded-lg glass-input text-white font-mono"
                     />
                   </div>
-                  <div>
+                  <div className="col-span-2 sm:col-span-1">
                     <label className="text-[10px] text-slate-400 uppercase font-semibold">Inverter Model</label>
                     <input
                       type="text"
@@ -377,7 +435,7 @@ export default function SettingsModal({
                 <span>Zeroise &amp; Start Fresh Live Readings</span>
               </div>
               <p className="text-slate-300 leading-relaxed">
-                Clears all historical mock logs and sets baseline meters to <strong>0 kWh</strong> for Block A (8 kWp), Block B (20 kWp), and Block F (31 kWp) so you can enter live daily readings.
+                Clears all historical mock logs and sets baseline meters to <strong>0 kWh</strong> for Athens solar plants so you can enter live daily readings.
               </p>
               <button
                 type="button"
@@ -408,11 +466,12 @@ export default function SettingsModal({
           </button>
           <button
             type="button"
+            disabled={isSaving}
             onClick={handleSaveAll}
-            className="flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-glow-amber transition"
+            className="flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-glow-amber transition disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-            <span>Save Configuration</span>
+            <span>{isSaving ? 'Saving & Syncing...' : 'Save Configuration'}</span>
           </button>
         </div>
       </div>

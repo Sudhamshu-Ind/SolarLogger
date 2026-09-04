@@ -14,6 +14,7 @@ export const INITIAL_BLOCKS = [
     color: "#f59e0b", // Amber
     inverterModel: "Deye SUN-8K-G04 (BLE)",
     status: "Active",
+    phase: 1,
   },
   {
     id: "B",
@@ -24,6 +25,7 @@ export const INITIAL_BLOCKS = [
     color: "#0284c7", // Sky Blue
     inverterModel: "Deye SUN-20K-G04 (BLE)",
     status: "Active",
+    phase: 1,
   },
   {
     id: "F",
@@ -34,6 +36,29 @@ export const INITIAL_BLOCKS = [
     color: "#10b981", // Emerald
     inverterModel: "Deye SUN-31K-G04 (BLE)",
     status: "Active",
+    phase: 1,
+  },
+  {
+    id: "G",
+    name: "Block G (Rooftop Plant)",
+    capacityKwp: 15,
+    inceptionDate: "2026-09-03",
+    initialMeterReading: 0,
+    color: "#a855f7", // Purple
+    inverterModel: "Deye SUN-15K-G04 (BLE)",
+    status: "Active",
+    phase: 2,
+  },
+  {
+    id: "K",
+    name: "Block K (Rooftop Plant)",
+    capacityKwp: 15,
+    inceptionDate: "2026-09-04",
+    initialMeterReading: 0,
+    color: "#ec4899", // Rose
+    inverterModel: "Deye SUN-15K-G04 (BLE)",
+    status: "Active",
+    phase: 2,
   },
 ];
 
